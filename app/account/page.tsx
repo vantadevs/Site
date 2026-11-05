@@ -1,2 +1,242 @@
-'use client'; import { useEffect,useState } from 'react'; import { createClient } from '@/lib/supabase-browser'; import { gbp } from '@/lib/money'; import Link from 'next/link';
-export default function Account(){const [user,setUser]=useState<any>(null);const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [orders,setOrders]=useState<any[]>([]);const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);const [mode,setMode]=useState<'login'|'register'>('login');useEffect(()=>{try{const db=createClient();db.auth.getUser().then(({data})=>{setUser(data.user);if(data.user)loadOrders(db)});const {data:listener}=db.auth.onAuthStateChange((_e,s)=>{setUser(s?.user||null);if(s?.user)loadOrders(db);else setOrders([])});return()=>listener.subscription.unsubscribe()}catch(e){setMessage('Add Supabase settings to enable customer accounts.')}},[]);async function loadOrders(db:any){const {data,error}=await db.from('orders').select('id,order_number,status,total_pence,created_at,order_items(id,product_name,quantity,unit_price_pence,digital_deliveries(delivered_value))').order('created_at',{ascending:false});if(!error)setOrders(data||[])}async function submit(){setBusy(true);setMessage('');try{const db=createClient();const result=mode==='register'?await db.auth.signUp({email,password,emailRedirectTo:`${location.origin}/account`}):await db.auth.signInWithPassword({email,password});if(result.error)throw result.error;setMessage(mode==='register'?'Check your email to confirm your account.':'Signed in successfully.')}catch(e){setMessage(e instanceof Error?e.message:'Unable to sign in.')}finally{setBusy(false)}}async function reset(){try{const db=createClient();const {error}=await db.auth.resetPasswordForEmail(email,{redirectTo:`${location.origin}/account`});if(error)throw error;setMessage('Password reset email sent.')}catch(e){setMessage(e instanceof Error?e.message:'Unable to send reset email.')}}async function logout(){const db=createClient();await db.auth.signOut();setUser(null)}return <div className="page-shell"><div className="page-hero"><div className="eyebrow">CUSTOMER AREA</div><h1>Your <em>account.</em></h1><p>Manage your orders and access completed digital purchases.</p></div>{!user?<div className="auth-card"><h2>{mode==='login'?'Welcome back.':'Create your account.'}</h2><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@example.com"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters"/></label><button className="btn btn-primary full" onClick={submit} disabled={busy||!email||!password}>{busy?'Please wait…':mode==='login'?'Sign in':'Create account'}</button><button className="text-link auth-switch" onClick={()=>setMode(mode==='login'?'register':'login')}>{mode==='login'?'Need an account? Register':'Already registered? Sign in'}</button><button className="text-link auth-switch" onClick={reset}>Forgot password?</button>{message&&<p className="form-note">{message}</p>}</div>:<div className="account-panel"><div className="account-top"><div><div className="eyebrow">SIGNED IN AS</div><h2>{user.email}</h2></div><button className="btn btn-ghost" onClick={logout}>Sign out</button></div><h3>Order history</h3>{orders.length?orders.map(o=><div className="order-card" key={o.id}><div><b>Order {o.order_number}</b><small>{new Date(o.created_at).toLocaleString('en-GB')}</small></div><span className={`order-status ${o.status}`}>{o.status}</span><strong>{gbp(o.total_pence)}</strong><div className="order-items">{o.order_items?.map((i:any)=><div key={i.id}><span>{i.product_name} × {i.quantity}</span>{i.digital_deliveries?.map((d:any,j:number)=><code key={j}>{d.delivered_value}</code>)}</div>)}</div></div>):<p className="muted">No orders yet. <Link href="/shop">Explore the shop.</Link></p>}{message&&<p>{message}</p>}</div>}</div>}
+
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase-browser';
+import { gbp } from '@/lib/money';
+import Link from 'next/link';
+
+export default function Account() {
+  const [user, setUser] = useState<any>(null);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [orders, setOrders] = useState<any[]>([]);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+
+  useEffect(() => {
+    try {
+      const db = createClient();
+
+      db.auth.getUser().then(({ data }) => {
+        setUser(data.user);
+        if (data.user) loadOrders(db);
+      });
+
+      const { data: listener } = db.auth.onAuthStateChange(
+        (_e, s) => {
+          setUser(s?.user || null);
+          if (s?.user) loadOrders(db);
+          else setOrders([]);
+        }
+      );
+
+      return () => listener.subscription.unsubscribe();
+    } catch (e) {
+      setMessage('Add Supabase settings to enable customer accounts.');
+    }
+  }, []);
+
+  async function loadOrders(db: any) {
+    const { data, error } = await db
+      .from('orders')
+      .select(
+        'id,order_number,status,total_pence,created_at,order_items(id,product_name,quantity,unit_price_pence,digital_deliveries(delivered_value))'
+      )
+      .order('created_at', { ascending: false });
+
+    if (!error) setOrders(data || []);
+  }
+
+  async function submit() {
+    setBusy(true);
+    setMessage('');
+
+    try {
+      const db = createClient();
+
+      const result =
+        mode === 'register'
+          ? await db.auth.signUp({
+              email,
+              password,
+              options: {
+                emailRedirectTo: `${location.origin}/account`,
+              },
+            })
+          : await db.auth.signInWithPassword({
+              email,
+              password,
+            });
+
+      if (result.error) throw result.error;
+
+      setMessage(
+        mode === 'register'
+          ? 'Check your email to confirm your account.'
+          : 'Signed in successfully.'
+      );
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : 'Unable to sign in.'
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reset() {
+    try {
+      const db = createClient();
+
+      const { error } = await db.auth.resetPasswordForEmail(email, {
+        redirectTo: `${location.origin}/account`,
+      });
+
+      if (error) throw error;
+
+      setMessage('Password reset email sent.');
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : 'Unable to send reset email.'
+      );
+    }
+  }
+
+  async function logout() {
+    const db = createClient();
+    await db.auth.signOut();
+    setUser(null);
+  }
+
+  return (
+    <div className="page-shell">
+      <div className="page-hero">
+        <div className="eyebrow">CUSTOMER AREA</div>
+        <h1>Your <em>account.</em></h1>
+        <p>
+          Manage your orders and access completed digital purchases.
+        </p>
+      </div>
+
+      {!user ? (
+        <div className="auth-card">
+          <h2>
+            {mode === 'login'
+              ? 'Welcome back.'
+              : 'Create your account.'}
+          </h2>
+
+          <label>
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="At least 8 characters"
+            />
+          </label>
+
+          <button
+            className="btn btn-primary full"
+            onClick={submit}
+            disabled={busy || !email || !password}
+          >
+            {busy
+              ? 'Please wait…'
+              : mode === 'login'
+                ? 'Sign in'
+                : 'Create account'}
+          </button>
+
+          <button
+            className="text-link auth-switch"
+            onClick={() =>
+              setMode(mode === 'login' ? 'register' : 'login')
+            }
+          >
+            {mode === 'login'
+              ? 'Need an account? Register'
+              : 'Already registered? Sign in'}
+          </button>
+
+          <button
+            className="text-link auth-switch"
+            onClick={reset}
+          >
+            Forgot password?
+          </button>
+
+          {message && <p className="form-note">{message}</p>}
+        </div>
+      ) : (
+        <div className="account-panel">
+          <div className="account-top">
+            <div>
+              <div className="eyebrow">SIGNED IN AS</div>
+              <h2>{user.email}</h2>
+            </div>
+
+            <button className="btn btn-ghost" onClick={logout}>
+              Sign out
+            </button>
+          </div>
+
+          <h3>Order history</h3>
+
+          {orders.length ? (
+            orders.map((o) => (
+              <div className="order-card" key={o.id}>
+                <div>
+                  <b>Order {o.order_number}</b>
+                  <small>
+                    {new Date(o.created_at).toLocaleString('en-GB')}
+                  </small>
+                </div>
+
+                <span className={`order-status ${o.status}`}>
+                  {o.status}
+                </span>
+
+                <strong>{gbp(o.total_pence)}</strong>
+
+                <div className="order-items">
+                  {o.order_items?.map((i: any) => (
+                    <div key={i.id}>
+                      <span>
+                        {i.product_name} × {i.quantity}
+                      </span>
+
+                      {i.digital_deliveries?.map(
+                        (d: any, j: number) => (
+                          <code key={j}>{d.delivered_value}</code>
+                        )
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="muted">
+              No orders yet. <Link href="/shop">Explore the shop.</Link>
+            </p>
+          )}
+
+          {message && <p>{message}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
